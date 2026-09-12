@@ -1,0 +1,136 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+.login-card h1 {
+  font-size: 1.35rem;
+  margin: 0 0 0.35rem;
+  color: #1f2933;
+  text-align: center;
+}
+
+.login-subtitle {
+  margin: 0 0 1.5rem;
+  color: #718096;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.login-error {
+  background: #fde8e8;
+  color: #9b1c1c;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.login-info {
+  background: #e6fffa;
+  color: #285e61;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.google-button {
+  width: 100%;
+  padding: 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e0;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1f2933;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.google-button:hover {
+  background: #f7fafc;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #a0aec0;
+  font-size: 0.8rem;
+  margin: 1.25rem 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.login-form input {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.login-form button {
+  margin-top: 0.25rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.login-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.link-button {
+  display: block;
+  margin: 0.9rem auto 0;
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.login-hint {
+  margin: 1.25rem 0 0;
+  color: #a0aec0;
+  font-size: 0.78rem;
+  text-align: center;
+}
