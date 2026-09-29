@@ -1,5 +1,5 @@
 .page {
-  max-width: 640px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 4rem;
   font-family: system-ui, -apple-system, sans-serif;
@@ -205,4 +205,179 @@ h1 {
 .expense-actions button.danger {
   border-color: #fca5a5;
   color: #b91c1c;
+}
+
+/* Double-entry ledger */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tabs button {
+  padding: 0.55rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #718096;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+.entry-head {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.entry-head input,
+.entry-head select,
+.line-grid input,
+.line-grid select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.line-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2rem;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.line-header {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #718096;
+}
+
+.line-total {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+.icon-btn,
+.link-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #718096;
+}
+
+.icon-btn {
+  font-size: 1.2rem;
+}
+
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.link-btn {
+  color: #2563eb;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+.balance-ok,
+.balance-bad {
+  font-size: 0.85rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.balance-ok {
+  color: #15803d;
+}
+
+.balance-bad {
+  color: #b45309;
+}
+
+.journal-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+}
+
+.journal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.journal-desc {
+  flex: 1;
+  font-weight: 600;
+}
+
+.journal-head button.danger.small {
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ledger-table td,
+.ledger-table th {
+  padding: 0.3rem 0.25rem;
+  text-align: left;
+}
+
+.ledger-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 6.5rem;
+}
+
+.ledger-table .indent {
+  padding-left: 1.5rem;
+}
+
+.accounts-table {
+  margin-bottom: 2rem;
+}
+
+.accounts-table thead th {
+  border-bottom: 1px solid #cbd5e0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #718096;
+}
+
+.accounts-table .group-row td {
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.accounts-table tfoot td {
+  border-top: 2px solid #1f2933;
+  font-weight: 700;
 }

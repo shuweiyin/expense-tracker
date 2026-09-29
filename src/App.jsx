@@ -3,9 +3,33 @@ import './App.css'
 import Login from './Login.jsx'
 import { useAuth } from './AuthContext.jsx'
 
-const API_URL = '/api/expenses'
+const TYPES = ['asset', 'liability', 'equity', 'income', 'expense']
+const TYPE_LABELS = {
+  asset: 'Assets',
+  liability: 'Liabilities',
+  equity: 'Equity',
+  income: 'Income',
+  expense: 'Expenses',
+}
 
-const emptyForm = { amount: '', category: '', date: '', note: '' }
+const cents = (value) => Math.round(Number(value || 0) * 100)
+const money = (c) =>
+  (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+// Assets and expenses grow with debits; everything else grows with credits.
+const balanceOf = (a) =>
+  a.type === 'asset' || a.type === 'expense' ? a.debit - a.credit : a.credit - a.debit
+
+const emptyLine = () => ({ account_id: '', debit: '', credit: '' })
+const today = () => new Date().toISOString().slice(0, 10)
+const emptyForm = () => ({
+  date: today(),
+  description: '',
+  lines: [emptyLine(), emptyLine()],
+})
 
 function App() {
   const { user, loading: authLoading, signOut } = useAuth()
@@ -18,40 +42,47 @@ function App() {
     return <Login />
   }
 
-  return <ExpenseTracker user={user} signOut={signOut} />
+  return <Ledger user={user} signOut={signOut} />
 }
 
-function ExpenseTracker({ user, signOut }) {
-  const [expenses, setExpenses] = useState([])
+function Ledger({ user, signOut }) {
+  const [accounts, setAccounts] = useState([])
+  const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [tab, setTab] = useState('journal')
   const [form, setForm] = useState(emptyForm)
-  const [editingId, setEditingId] = useState(null)
+  const [newAccount, setNewAccount] = useState({ name: '', type: 'expense' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    loadExpenses()
+    load()
   }, [])
 
-  async function authedFetch(url, options = {}) {
+  async function api(path, options = {}) {
     const token = await user.getIdToken()
-    return fetch(url, {
+    const res = await fetch(`/api/${path}`, {
       ...options,
       headers: {
-        ...options.headers,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         Authorization: `Bearer ${token}`,
       },
     })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Request failed (${res.status})`)
+    }
+    return res.status === 204 ? null : res.json()
   }
 
-  async function loadExpenses() {
+  async function load() {
     setLoading(true)
     setError(null)
     try {
-      const res = await authedFetch(API_URL)
-      if (!res.ok) throw new Error('Failed to load expenses')
-      const data = await res.json()
-      setExpenses(data)
+      const accts = await api('accounts')
+      const txs = await api('transactions')
+      setAccounts(accts)
+      setTransactions(txs)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -59,46 +90,37 @@ function ExpenseTracker({ user, signOut }) {
     }
   }
 
-  function startEdit(expense) {
-    setEditingId(expense.id)
-    setForm({
-      amount: String(expense.amount),
-      category: expense.category,
-      date: expense.date,
-      note: expense.note ?? '',
-    })
+  function setLine(index, patch) {
+    setForm((f) => ({
+      ...f,
+      lines: f.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
   }
 
-  function cancelEdit() {
-    setEditingId(null)
-    setForm(emptyForm)
-  }
+  const totalDebit = form.lines.reduce((s, l) => s + cents(l.debit), 0)
+  const totalCredit = form.lines.reduce((s, l) => s + cents(l.credit), 0)
+  const balanced = totalDebit > 0 && totalDebit === totalCredit
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.amount || !form.category || !form.date) return
+    if (!balanced) return
+    const entries = form.lines
+      .filter((l) => l.account_id && (cents(l.debit) || cents(l.credit)))
+      .map((l) => ({
+        account_id: Number(l.account_id),
+        debit: cents(l.debit),
+        credit: cents(l.credit),
+      }))
 
     setSaving(true)
     setError(null)
-    const payload = {
-      amount: Number(form.amount),
-      category: form.category,
-      date: form.date,
-      note: form.note,
-    }
-
     try {
-      const res = await authedFetch(
-        editingId ? `${API_URL}/${editingId}` : API_URL,
-        {
-          method: editingId ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }
-      )
-      if (!res.ok) throw new Error('Failed to save expense')
-      await loadExpenses()
-      cancelEdit()
+      await api('transactions', {
+        method: 'POST',
+        body: JSON.stringify({ date: form.date, description: form.description, entries }),
+      })
+      setForm(emptyForm())
+      await load()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -109,21 +131,35 @@ function ExpenseTracker({ user, signOut }) {
   async function handleDelete(id) {
     setError(null)
     try {
-      const res = await authedFetch(`${API_URL}/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete expense')
-      setExpenses((prev) => prev.filter((expense) => expense.id !== id))
-      if (editingId === id) cancelEdit()
+      await api(`transactions/${id}`, { method: 'DELETE' })
+      await load()
     } catch (err) {
       setError(err.message)
     }
   }
 
-  const total = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  async function handleAddAccount(e) {
+    e.preventDefault()
+    setError(null)
+    try {
+      await api('accounts', { method: 'POST', body: JSON.stringify(newAccount) })
+      setNewAccount({ name: '', type: newAccount.type })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const sum = (type) =>
+    accounts.filter((a) => a.type === type).reduce((s, a) => s + balanceOf(a), 0)
+  const netWorth = sum('asset') - sum('liability')
+  const tbDebit = accounts.reduce((s, a) => s + a.debit, 0)
+  const tbCredit = accounts.reduce((s, a) => s + a.credit, 0)
 
   return (
     <div className="page">
       <div className="page-header">
-        <h1>Daily Expense Tracker</h1>
+        <h1>Double-Entry Ledger</h1>
         <div className="user-bar">
           <span className="user-name">{user.displayName || user.email}</span>
           <button type="button" className="secondary" onClick={signOut}>
@@ -133,88 +169,226 @@ function ExpenseTracker({ user, signOut }) {
       </div>
 
       <div className="total-card">
-        <span className="total-label">Total</span>
-        <span className="total-amount">${total.toFixed(2)}</span>
+        <span className="total-label">Net worth</span>
+        <span className="total-amount">{money(netWorth)}</span>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
-      <form className="expense-form" onSubmit={handleSubmit}>
-        <h2>{editingId ? 'Edit expense' : 'Add expense'}</h2>
-        <div className="form-row">
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Amount"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            required
-          />
-          <input
-            type="text"
-            placeholder="Category"
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-            required
-          />
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            required
-          />
-          <input
-            type="text"
-            placeholder="Note (optional)"
-            value={form.note}
-            onChange={(e) => setForm({ ...form, note: e.target.value })}
-          />
-        </div>
-        <div className="form-actions">
-          <button type="submit" disabled={saving}>
-            {editingId ? 'Save changes' : 'Add expense'}
-          </button>
-          {editingId && (
-            <button type="button" className="secondary" onClick={cancelEdit}>
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
+      <div className="tabs">
+        <button
+          type="button"
+          className={tab === 'journal' ? 'active' : ''}
+          onClick={() => setTab('journal')}
+        >
+          Journal
+        </button>
+        <button
+          type="button"
+          className={tab === 'accounts' ? 'active' : ''}
+          onClick={() => setTab('accounts')}
+        >
+          Accounts
+        </button>
+      </div>
 
       {loading ? (
-        <p className="status-text">Loading expenses…</p>
-      ) : expenses.length === 0 ? (
-        <p className="status-text">No expenses yet.</p>
-      ) : (
-        <ul className="expense-list">
-          {expenses.map((expense) => (
-            <li key={expense.id} className="expense-item">
-              <div className="expense-main">
-                <span className="expense-amount">
-                  ${expense.amount.toFixed(2)}
-                </span>
-                <span className="expense-category">{expense.category}</span>
-                <span className="expense-date">{expense.date}</span>
-                {expense.note && (
-                  <span className="expense-note">{expense.note}</span>
-                )}
-              </div>
-              <div className="expense-actions">
-                <button type="button" onClick={() => startEdit(expense)}>
-                  Edit
-                </button>
+        <p className="status-text">Loading…</p>
+      ) : tab === 'journal' ? (
+        <>
+          <form className="expense-form" onSubmit={handleSubmit}>
+            <h2>New journal entry</h2>
+            <div className="entry-head">
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                required
+              />
+              <input
+                type="text"
+                placeholder="Description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+            </div>
+            <div className="line-grid line-header">
+              <span>Account</span>
+              <span>Debit</span>
+              <span>Credit</span>
+              <span />
+            </div>
+            {form.lines.map((line, i) => (
+              <div className="line-grid" key={i}>
+                <select
+                  value={line.account_id}
+                  onChange={(e) => setLine(i, { account_id: e.target.value })}
+                  required
+                >
+                  <option value="">Select account…</option>
+                  {TYPES.map((type) => (
+                    <optgroup key={type} label={TYPE_LABELS[type]}>
+                      {accounts
+                        .filter((a) => a.type === type)
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={line.debit}
+                  onChange={(e) => setLine(i, { debit: e.target.value, credit: '' })}
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={line.credit}
+                  onChange={(e) => setLine(i, { credit: e.target.value, debit: '' })}
+                />
                 <button
                   type="button"
-                  className="danger"
-                  onClick={() => handleDelete(expense.id)}
+                  className="icon-btn"
+                  disabled={form.lines.length <= 2}
+                  onClick={() =>
+                    setForm({ ...form, lines: form.lines.filter((_, j) => j !== i) })
+                  }
+                  aria-label="Remove line"
                 >
-                  Delete
+                  ×
                 </button>
               </div>
-            </li>
-          ))}
-        </ul>
+            ))}
+            <div className="line-grid line-total">
+              <span>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })}
+                >
+                  + Add line
+                </button>
+              </span>
+              <span>{money(totalDebit)}</span>
+              <span>{money(totalCredit)}</span>
+              <span />
+            </div>
+            <p className={balanced ? 'balance-ok' : 'balance-bad'}>
+              {balanced
+                ? 'Balanced'
+                : `Out of balance by ${money(Math.abs(totalDebit - totalCredit))}`}
+            </p>
+            <div className="form-actions">
+              <button type="submit" disabled={saving || !balanced}>
+                Post entry
+              </button>
+            </div>
+          </form>
+
+          {transactions.length === 0 ? (
+            <p className="status-text">No journal entries yet.</p>
+          ) : (
+            <ul className="expense-list">
+              {transactions.map((t) => (
+                <li key={t.id} className="journal-item">
+                  <div className="journal-head">
+                    <span className="expense-date">{t.date}</span>
+                    <span className="journal-desc">{t.description}</span>
+                    <button
+                      type="button"
+                      className="danger small"
+                      onClick={() => handleDelete(t.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <table className="ledger-table">
+                    <tbody>
+                      {t.entries.map((e, i) => (
+                        <tr key={i}>
+                          <td className={e.credit ? 'indent' : ''}>{e.account_name}</td>
+                          <td className="num">{e.debit ? money(e.debit) : ''}</td>
+                          <td className="num">{e.credit ? money(e.credit) : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : (
+        <>
+          <table className="ledger-table accounts-table">
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th className="num">Debit</th>
+                <th className="num">Credit</th>
+                <th className="num">Balance</th>
+              </tr>
+            </thead>
+            {TYPES.map((type) => (
+              <tbody key={type}>
+                <tr className="group-row">
+                  <td colSpan="3">{TYPE_LABELS[type]}</td>
+                  <td className="num">{money(sum(type))}</td>
+                </tr>
+                {accounts
+                  .filter((a) => a.type === type)
+                  .map((a) => (
+                    <tr key={a.id}>
+                      <td className="indent">{a.name}</td>
+                      <td className="num">{a.debit ? money(a.debit) : ''}</td>
+                      <td className="num">{a.credit ? money(a.credit) : ''}</td>
+                      <td className="num">{money(balanceOf(a))}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            ))}
+            <tfoot>
+              <tr>
+                <td>Trial balance</td>
+                <td className="num">{money(tbDebit)}</td>
+                <td className="num">{money(tbCredit)}</td>
+                <td className="num">{tbDebit === tbCredit ? '✓' : '✗'}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <form className="expense-form" onSubmit={handleAddAccount}>
+            <h2>Add account</h2>
+            <div className="entry-head">
+              <input
+                type="text"
+                placeholder="Account name"
+                value={newAccount.name}
+                onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                required
+              />
+              <select
+                value={newAccount.type}
+                onChange={(e) => setNewAccount({ ...newAccount, type: e.target.value })}
+              >
+                {TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-actions">
+              <button type="submit">Add account</button>
+            </div>
+          </form>
+        </>
       )}
     </div>
   )
